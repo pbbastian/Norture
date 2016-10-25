@@ -76,7 +76,8 @@ namespace Norture
             var wsPosition = camera.ScreenToWorldPoint(new Vector3(lastPosition.x, lastPosition.y, camera.nearClipPlane));
             var wsDirection = (wsPosition - cameraPosition).normalized;
             Vector3 intersection;
-            LineSphereIntersection(cameraPosition, wsDirection, out intersection);
+            var ray = new Ray(cameraPosition, wsDirection);
+            ray.IntersectsWithSphere(out intersection);
             
             if (correctEvent)
             {
@@ -97,23 +98,6 @@ namespace Norture
             // Direction -> Cubemap -> Direction -> Cubemap for demonstrative purposes.
             var coordinate = new CubemapCoordinate(new CubemapCoordinate(direction).ToDirection());
             cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*cubemap.width), (int)(coordinate.V*cubemap.width), color);
-        }
-
-        bool LineSphereIntersection(Vector3 origin, Vector3 direction, out Vector3 intersection)
-        {
-            var directionDotOrigin = Vector3.Dot(direction, origin);
-            var x = directionDotOrigin * directionDotOrigin - origin.sqrMagnitude + 0.25f;
-            if (x < 0f)
-            {
-                intersection = Vector3.zero;
-                return false;
-            }
-            else
-            {
-                var distance = -directionDotOrigin - Mathf.Sqrt(x);
-                intersection = origin + distance * direction;
-                return true;
-            }
         }
 
         void OnEnable()
