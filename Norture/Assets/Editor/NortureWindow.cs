@@ -15,7 +15,9 @@ namespace Norture
         DragController dragController;
         [SerializeField]
         Vector2 cameraDrag;
-        Vector2 lastPosition;
+        Vector2 downPosition;
+        bool downValid = false;
+        Vector2 upPosition;
         Texture previewTexture;
         Rect previewRect;
         bool previewDirty = false;
@@ -63,41 +65,68 @@ namespace Norture
             var eventType = current.GetTypeForControl(controlId);
 
             var correctEvent = (eventType == EventType.MouseDown || eventType == EventType.MouseDrag) && current.modifiers == EventModifiers.None;
+            Vector2 currentPosition;
 
-            if (correctEvent)
+            if (eventType == EventType.MouseDown && current.modifiers == EventModifiers.None)
             {
                 current.Use();
-                lastPosition = current.mousePosition;
-                lastPosition.x = camera.pixelWidth * lastPosition.x / rect.width;
-                lastPosition.y = camera.pixelHeight * (rect.height - lastPosition.y) / rect.height;
-            }
+                downPosition = current.mousePosition;
+                downPosition.x = camera.pixelWidth * downPosition.x / rect.width;
+                downPosition.y = camera.pixelHeight * (rect.height - downPosition.y) / rect.height;
 
-            var cameraPosition = camera.gameObject.transform.position;
-            var wsPosition = camera.ScreenToWorldPoint(new Vector3(lastPosition.x, lastPosition.y, camera.nearClipPlane));
-            var wsDirection = (wsPosition - cameraPosition).normalized;
-            Vector3 intersection;
-            var ray = new Ray(cameraPosition, wsDirection);
-            ray.IntersectsWithSphere(out intersection);
-            
-            if (correctEvent)
+                Vector3 downPositionWorldSpace;
+                downValid = RaycastScreenWithSphere(camera, downPosition, out downPositionWorldSpace);
+                if (downValid)
+                {
+                    SetCubemapPixelByDirection(cubemap, downPositionWorldSpace.normalized, Color.black);
+                    cubemap.Apply();
+                    Debug.Log(downPositionWorldSpace);
+                }
+                else
+                {
+                    Debug.Log("Invalid down position");
+                }
+            }
+            else if (downValid && eventType == EventType.MouseUp && current.modifiers == EventModifiers.None)
             {
-                SetCubemapPixelByDirection(cubemap, intersection.normalized, Color.black);
-                cubemap.Apply();
-            }
+                current.Use();
+                upPosition = current.mousePosition;
+                upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
+                upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
 
-            EditorGUILayout.LabelField("Camera Pixel Size", string.Format("({0}, {1})", camera.pixelWidth, camera.pixelHeight));
-            EditorGUILayout.LabelField("Camera World Space", cameraPosition.ToString());
-            EditorGUILayout.LabelField("Screen Space", lastPosition.ToString());
-            EditorGUILayout.LabelField("World Space", wsPosition.ToString());
-            EditorGUILayout.LabelField("Direction", wsDirection.ToString());
-            EditorGUILayout.LabelField("Intersection", intersection.ToString());
+                // Will need downPositionWorldSpace later
+                Vector3 downPositionWorldSpace, upPositionWorldSpace;
+                RaycastScreenWithSphere(camera, downPosition, out downPositionWorldSpace);
+                if (RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace))
+                {
+                    SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
+                    cubemap.Apply();
+                    Debug.Log(upPositionWorldSpace);
+                }
+                else
+                {
+                    Debug.Log("Invalid up position");
+                    Debug.Log(upPosition);
+                }
+                downValid = false;
+            }
+        }
+
+        bool RaycastScreenWithSphere(Camera camera, Vector2 positionScreenSpace, out Vector3 intersectionWorldSpace)
+        {
+            var cameraWorldSpace = camera.gameObject.transform.position;
+            var positionWorldSpace = camera.ScreenToWorldPoint(new Vector3(positionScreenSpace.x, positionScreenSpace.y, camera.nearClipPlane));
+            var directionWorldSpace = (positionWorldSpace - cameraWorldSpace).normalized;
+
+            var ray = new Ray(cameraWorldSpace, directionWorldSpace);
+            return ray.IntersectsWithSphere(out intersectionWorldSpace);
         }
 
         void SetCubemapPixelByDirection(Cubemap cubemap, Vector3 direction, Color color)
         {
             // Direction -> Cubemap -> Direction -> Cubemap for demonstrative purposes.
             var coordinate = new CubemapCoordinate(new CubemapCoordinate(direction).ToDirection());
-            cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*cubemap.width), (int)(coordinate.V*cubemap.width), color);
+            cubemap.SetPixel(coordinate.Face, (int)(coordinate.U * cubemap.width), (int)(coordinate.V * cubemap.width), color);
         }
 
         void OnEnable()
