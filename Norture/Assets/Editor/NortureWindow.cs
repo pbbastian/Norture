@@ -94,66 +94,9 @@ namespace Norture
 
         void SetCubemapPixelByDirection(Cubemap cubemap, Vector3 direction, Color color)
         {
-            float u, v;
-            var face = CalculateCubemapCoordinates(direction, out u, out v);
-            cubemap.SetPixel(face, (int)(u*cubemap.width), (int)(v*cubemap.width), color);
-        }
-
-        CubemapFace CalculateCubemapCoordinates(Vector3 direction, out float u, out float v)
-        {
-            var absX = Mathf.Abs(direction.x);
-            var absY = Mathf.Abs(direction.y);
-            var absZ = Mathf.Abs(direction.z);
-
-            CubemapFace face;
-
-            if (absX > absY && absX > absZ)
-            {
-                if (direction.x > 0)
-                {
-                    face = CubemapFace.PositiveX;
-                    CalculateUV(-direction.z, -direction.y, absX, out u, out v);
-                }
-                else
-                {
-                    face = CubemapFace.NegativeX;
-                    CalculateUV(direction.z, -direction.y, absX, out u, out v);
-                }
-            }
-            else if (absY > absX && absY > absZ)
-            {
-                if (direction.y > 0)
-                {
-                    face = CubemapFace.PositiveY;
-                    CalculateUV(direction.x, direction.z, absY, out u, out v);
-                }
-                else
-                {
-                    face = CubemapFace.NegativeY;
-                    CalculateUV(direction.x, -direction.z, absY, out u, out v);
-                }
-            }
-            else
-            {
-                if (direction.z > 0)
-                {
-                    face = CubemapFace.PositiveZ;
-                    CalculateUV(direction.x, -direction.y, absZ, out u, out v);
-                }
-                else
-                {
-                    face = CubemapFace.NegativeZ;
-                    CalculateUV(-direction.x, -direction.y, absZ, out u, out v);
-                }
-            }
-
-            return face;
-        }
-
-        void CalculateUV(float sc, float tc, float absMa, out float u, out float v)
-        {
-            u = ((sc/absMa) + 1f) * 0.5f;
-            v = ((tc/absMa) + 1f) * 0.5f;
+            // Direction -> Cubemap -> Direction -> Cubemap for demonstrative purposes.
+            var coordinate = new CubemapCoordinate(new CubemapCoordinate(direction).ToDirection());
+            cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*cubemap.width), (int)(coordinate.V*cubemap.width), color);
         }
 
         bool LineSphereIntersection(Vector3 origin, Vector3 direction, out Vector3 intersection)
