@@ -1,7 +1,10 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Linq;
 using UnityEditor;
 using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace Norture
 {
@@ -80,7 +83,7 @@ namespace Norture
                 {
                     SetCubemapPixelByDirection(cubemap, downPositionWorldSpace.normalized, Color.black);
                     cubemap.Apply();
-                    Debug.Log(downPositionWorldSpace);
+                    Debug.LogFormat("Down: {0}", new CubemapCoordinate(downPositionWorldSpace).ToString());
                 }
                 else
                 {
@@ -100,15 +103,30 @@ namespace Norture
                 if (RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace))
                 {
                     SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
+                    var coordinates = GetCubemapArcCoordinates(cubemap, downPositionWorldSpace, upPositionWorldSpace);
+                    foreach (var coordinate in coordinates)
+                    {
+                        cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*(float)cubemap.width), (int)(coordinate.V*(float)cubemap.width), Color.white);
+                    }
                     cubemap.Apply();
-                    Debug.Log(upPositionWorldSpace);
+                    Debug.LogFormat("Up: {0}", new CubemapCoordinate(upPositionWorldSpace).ToString());
                 }
                 else
                 {
                     Debug.Log("Invalid up position");
-                    Debug.Log(upPosition);
                 }
                 downValid = false;
+            }
+            else if (false && eventType == EventType.MouseDrag && current.modifiers == EventModifiers.None)
+            {
+                current.Use();
+                upPosition = current.mousePosition;
+                upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
+                upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
+                Vector3 upPositionWorldSpace;
+                RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace);
+                SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
+                cubemap.Apply();
             }
         }
 
@@ -127,6 +145,47 @@ namespace Norture
             // Direction -> Cubemap -> Direction -> Cubemap for demonstrative purposes.
             var coordinate = new CubemapCoordinate(new CubemapCoordinate(direction).ToDirection());
             cubemap.SetPixel(coordinate.Face, (int)(coordinate.U * cubemap.width), (int)(coordinate.V * cubemap.width), color);
+        }
+
+        IEnumerable<CubemapCoordinate> GetCubemapArcCoordinates(Cubemap cubemap, Vector3 startPosition, Vector3 endPosition)
+        {
+            var startCoordinate = new CubemapCoordinate(startPosition).PixelCenter(cubemap.width);
+            var endCoordinate = new CubemapCoordinate(endPosition).PixelCenter(cubemap.width);
+
+            startPosition = startCoordinate.ToDirection();
+            endPosition = endCoordinate.ToDirection();
+            var lineDirection = (endPosition - startPosition).normalized;
+
+            if (startCoordinate.Face != endCoordinate.Face)
+            {
+                Debug.LogWarningFormat("Drawing across faces not supported yet. {0} -> {1}", startCoordinate, endCoordinate);
+                return new CubemapCoordinate[0];
+            }
+
+            var coordinates = new List<CubemapCoordinate> { startCoordinate };
+
+            int i = 0;
+            bool complete = startCoordinate.Equals(endCoordinate, 1f / (float)cubemap.width);
+            while (!complete && i < 1000)
+            {
+                var currentCoordinate = coordinates
+                    .Last()
+                    .GetNeighbors(cubemap.width)
+                    .MinBy((candidatePosition) => UnitSphereUtil.ArcLength(candidatePosition.ToDirection(), endPosition));
+                coordinates.Add(currentCoordinate);
+                complete = currentCoordinate.Equals(endCoordinate, 1f / (float)cubemap.width);
+                i++;
+            }
+
+            if (i == 1000)
+            {
+                Debug.LogWarning("Max iterations reached");
+            }
+
+            Debug.LogFormat("Start: {0}\nEnd: {1}", startCoordinate, endCoordinate);
+            Debug.Log(string.Join("\n", coordinates.Select(c => c.ToString()).ToArray()));
+
+            return coordinates;
         }
 
         void OnEnable()

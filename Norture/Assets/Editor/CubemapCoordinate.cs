@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace Norture
@@ -33,9 +34,47 @@ namespace Norture
             V = v;
         }
 
+        public CubemapCoordinate(CubemapCoordinate other, float u, float v)
+        {
+            Face = other.Face;
+            U = u;
+            V = v;
+        }
+
         public CubemapCoordinate(Vector3 direction)
         {
             CalculateCoordinatesFromDirection(direction, out Face, out U, out V);
+        }
+
+        public CubemapCoordinate[] GetNeighbors(int size)
+        {
+            var delta = 1f / (float)size;
+            return new CubemapCoordinate[] {
+                // Direct neighbors
+                new CubemapCoordinate(Face, U + delta, V),
+                new CubemapCoordinate(Face, U - delta, V),
+                new CubemapCoordinate(Face, U, V + delta),
+                new CubemapCoordinate(Face, U, V - delta),
+                // Corner neighbors
+                new CubemapCoordinate(Face, U + delta, V + delta),
+                new CubemapCoordinate(Face, U + delta, V - delta),
+                new CubemapCoordinate(Face, U - delta, V + delta),
+                new CubemapCoordinate(Face, U - delta, V - delta)
+            };
+        }
+
+        public CubemapCoordinate PixelCenter(int size)
+        {
+            return new CubemapCoordinate(Face,
+                (Mathf.Floor(U * size) + 0.5f) / size,
+                (Mathf.Floor(V * size) + 0.5f) / size);
+        }
+
+        public bool Equals(CubemapCoordinate other, float eps)
+        {
+            return Face == other.Face
+                && Mathf.Abs(U - other.U) < eps
+                && Mathf.Abs(V - other.V) < eps;
         }
 
         static void CalculateCoordinatesFromDirection(Vector3 direction, out CubemapFace face, out float u, out float v)
@@ -107,7 +146,12 @@ namespace Norture
             var faceOrigin = FaceOrigins[faceIndex];
             var worldCoordinate = faceOrigin + worldUV;
             
-            return worldCoordinate;
+            return worldCoordinate.normalized;
+        }
+
+        public override string ToString()
+        {
+            return "(" + Enum.GetName(typeof(CubemapFace), Face) + ", " + U + ", " + V + ")";
         }
     }
 }
