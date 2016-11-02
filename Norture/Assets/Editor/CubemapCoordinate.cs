@@ -56,10 +56,10 @@ namespace Norture
                 new CubemapCoordinate(Face, U, V + delta),
                 new CubemapCoordinate(Face, U, V - delta),
                 // Corner neighbors
-                new CubemapCoordinate(Face, U + delta, V + delta),
-                new CubemapCoordinate(Face, U + delta, V - delta),
-                new CubemapCoordinate(Face, U - delta, V + delta),
-                new CubemapCoordinate(Face, U - delta, V - delta)
+                // new CubemapCoordinate(Face, U + delta, V + delta),
+                // new CubemapCoordinate(Face, U + delta, V - delta),
+                // new CubemapCoordinate(Face, U - delta, V + delta),
+                // new CubemapCoordinate(Face, U - delta, V - delta)
             };
         }
 

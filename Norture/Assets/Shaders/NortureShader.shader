@@ -33,10 +33,10 @@
         float3 objectPos = normalize(mul(unity_WorldToObject, float4(IN.worldPos, 1.0)).xyz);
         // Albedo comes from a texture tinted by color
         fixed4 c = texCUBE(_Cube, objectPos) /* float4(objectPos * 0.5 + 0.5, 1.0) */ * _Color;
-        o.Albedo = c.rgb;
+        o.Emission = c.rgb;
         // Metallic and smoothness come from slider variables
-        o.Metallic = _Metallic;
-        o.Smoothness = _Glossiness;
+        o.Metallic = 0.0;
+        o.Smoothness = 0.0;
         o.Alpha = c.a;
       }
       ENDCG

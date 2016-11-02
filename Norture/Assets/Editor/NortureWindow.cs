@@ -24,7 +24,11 @@ namespace Norture
         Texture previewTexture;
         Rect previewRect;
         bool previewDirty = false;
-        const int cubemapResolution = 256;
+        const int cubemapResolution = 512;
+        DateTime lastTime;
+        TimeSpan currentTimeSpan;
+        int callCount = 0;
+        int correctCallCount = 0;
 
         [MenuItem("Window/Norture")]
         public static void ShowWindow()
@@ -36,6 +40,7 @@ namespace Norture
         {
             if (previewDirty)
             {
+                cubemap.Apply();
                 previewRenderUtility.BeginPreview(previewRect, GUIStyle.none);
                 previewRenderUtility.DrawMesh(sphereMesh, Matrix4x4.identity, material, 0);
 
@@ -47,6 +52,8 @@ namespace Norture
                 previewTexture = previewRenderUtility.EndPreview();
                 previewDirty = false;
             }
+            
+            Repaint();
         }
 
         void OnGUI()
@@ -58,19 +65,37 @@ namespace Norture
             HandleClick(previewRect, previewRenderUtility.m_Camera);
             previewDirty = true;
 
+            var timeSpan = DateTime.Now - lastTime;
+            currentTimeSpan += timeSpan;
+            callCount++;
+            lastTime = DateTime.Now;
+
+            if (currentTimeSpan > TimeSpan.FromSeconds(1))
+            {
+                Debug.LogFormat("Calls per second: {0}", callCount / currentTimeSpan.TotalSeconds);
+                Debug.LogFormat("Correct calls per second: {0}", correctCallCount / currentTimeSpan.TotalSeconds);
+                currentTimeSpan = TimeSpan.Zero;
+                callCount = 0;
+                correctCallCount = 0;
+            }
+
             GUI.DrawTexture(previewRect, previewTexture, ScaleMode.StretchToFill, false);
         }
 
         void HandleClick(Rect rect, Camera camera)
         {
             var current = Event.current;
-            var controlId = GUIUtility.GetControlID("Slider".GetHashCode(), FocusType.Passive);
-            var eventType = current.GetTypeForControl(controlId);
+            var eventType = current.GetTypeForControl(GUIUtility.GetControlID(FocusType.Passive));
 
             var correctEvent = (eventType == EventType.MouseDown || eventType == EventType.MouseDrag) && current.modifiers == EventModifiers.None;
-            Vector2 currentPosition;
 
-            if (eventType == EventType.MouseDown && current.modifiers == EventModifiers.None)
+            if (eventType == EventType.MouseMove)
+            {
+                current.Use();
+                Debug.Log(current.mousePosition);
+            }
+
+            else if (eventType == EventType.MouseDown && current.modifiers == EventModifiers.None)
             {
                 current.Use();
                 downPosition = current.mousePosition;
@@ -92,10 +117,46 @@ namespace Norture
             }
             else if (downValid && eventType == EventType.MouseUp && current.modifiers == EventModifiers.None)
             {
+                // current.Use();
+                // upPosition = current.mousePosition;
+                // upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
+                // upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
+
+                // // Will need downPositionWorldSpace later
+                // Vector3 downPositionWorldSpace, upPositionWorldSpace;
+                // RaycastScreenWithSphere(camera, downPosition, out downPositionWorldSpace);
+                // if (RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace))
+                // {
+                //     SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
+                //     var coordinates = GetCubemapArcCoordinates(cubemap, downPositionWorldSpace, upPositionWorldSpace);
+                //     foreach (var coordinate in coordinates)
+                //     {
+                //         cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*(float)cubemap.width), (int)(coordinate.V*(float)cubemap.width), Color.white);
+                //     }
+                //     cubemap.Apply();
+                //     Debug.LogFormat("Up: {0}", new CubemapCoordinate(upPositionWorldSpace).ToString());
+                // }
+                // else
+                // {
+                //     Debug.Log("Invalid up position");
+                // }
+                downValid = false;
+            }
+            else if (eventType == EventType.MouseDrag && downValid && current.modifiers == EventModifiers.None)
+            {
+                // current.Use();
+                // upPosition = current.mousePosition;
+                // upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
+                // upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
+                // Vector3 upPositionWorldSpace;
+                // RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace);
+                // SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
+                // cubemap.Apply();
+
                 current.Use();
                 upPosition = current.mousePosition;
-                upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
-                upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
+                upPosition.x = camera.pixelWidth * Mathf.Clamp01(upPosition.x / rect.width);
+                upPosition.y = camera.pixelHeight * Mathf.Clamp01((rect.height - upPosition.y) / rect.height);
 
                 // Will need downPositionWorldSpace later
                 Vector3 downPositionWorldSpace, upPositionWorldSpace;
@@ -106,28 +167,19 @@ namespace Norture
                     var coordinates = GetCubemapArcCoordinates(cubemap, downPositionWorldSpace, upPositionWorldSpace);
                     foreach (var coordinate in coordinates)
                     {
-                        cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*(float)cubemap.width), (int)(coordinate.V*(float)cubemap.width), Color.white);
+                        cubemap.SetPixel(coordinate.Face, (int)(coordinate.U*(float)cubemap.width), (int)(coordinate.V*(float)cubemap.width), Color.black);
                     }
-                    cubemap.Apply();
-                    Debug.LogFormat("Up: {0}", new CubemapCoordinate(upPositionWorldSpace).ToString());
+                    // Debug.LogFormat("Up: {0}", new CubemapCoordinate(upPositionWorldSpace).ToString());
                 }
                 else
                 {
-                    Debug.Log("Invalid up position");
+                    // Debug.Log("Invalid up position");
                 }
-                downValid = false;
+
+                downPosition = upPosition;
+                correctCallCount++;
             }
-            else if (false && eventType == EventType.MouseDrag && current.modifiers == EventModifiers.None)
-            {
-                current.Use();
-                upPosition = current.mousePosition;
-                upPosition.x = camera.pixelWidth * upPosition.x / rect.width;
-                upPosition.y = camera.pixelHeight * (rect.height - upPosition.y) / rect.height;
-                Vector3 upPositionWorldSpace;
-                RaycastScreenWithSphere(camera, upPosition, out upPositionWorldSpace);
-                SetCubemapPixelByDirection(cubemap, upPositionWorldSpace.normalized, Color.black);
-                cubemap.Apply();
-            }
+
         }
 
         bool RaycastScreenWithSphere(Camera camera, Vector2 positionScreenSpace, out Vector3 intersectionWorldSpace)
@@ -168,10 +220,12 @@ namespace Norture
             bool complete = startCoordinate.Equals(endCoordinate, 1f / (float)cubemap.width);
             while (!complete && i < 1000)
             {
+                var lastPosition = coordinates.Last().ToDirection().normalized;
                 var currentCoordinate = coordinates
                     .Last()
                     .GetNeighbors(cubemap.width)
-                    .MinBy((candidatePosition) => UnitSphereUtil.ArcLength(candidatePosition.ToDirection(), endPosition));
+                    // .MinBy((candidateCoordinate) => UnitSphereUtil.GreatCircleDistance(candidateCoordinate.ToDirection(), endPosition));
+                    .MinBy((candidateCoordinate) => (endPosition - candidateCoordinate.ToDirection()).magnitude);
                 coordinates.Add(currentCoordinate);
                 complete = currentCoordinate.Equals(endCoordinate, 1f / (float)cubemap.width);
                 i++;
@@ -182,8 +236,8 @@ namespace Norture
                 Debug.LogWarning("Max iterations reached");
             }
 
-            Debug.LogFormat("Start: {0}\nEnd: {1}", startCoordinate, endCoordinate);
-            Debug.Log(string.Join("\n", coordinates.Select(c => c.ToString()).ToArray()));
+            // Debug.LogFormat("Start: {0}\nEnd: {1}", startCoordinate, endCoordinate);
+            // Debug.Log(string.Join("\n", coordinates.Select(c => c.ToString()).ToArray()));
 
             return coordinates;
         }
@@ -200,6 +254,7 @@ namespace Norture
             previewTexture = new Texture2D(0, 0);
             previewRect = new Rect(Vector2.zero, new Vector2(cubemapResolution, cubemapResolution));
             previewDirty = true;
+            lastTime = DateTime.Now;
         }
 
         void InitializeCubemap(Cubemap cubemap)
