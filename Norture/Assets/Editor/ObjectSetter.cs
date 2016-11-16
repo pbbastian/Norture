@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System;
+using Norture.Extensions;
 
 namespace Norture
 {
@@ -30,7 +31,7 @@ namespace Norture
             typeof(Camera)
             });
             var camera = gameObject.GetComponent<Camera>();
-            CameraExtensions.SetOnlyDrawMesh(camera);
+            camera.SetOnlyDrawMesh();
 
             DestroyImmediate(gameObject, true);
         }

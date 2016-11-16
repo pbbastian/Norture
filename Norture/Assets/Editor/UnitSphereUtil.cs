@@ -9,6 +9,6 @@ namespace Norture
             return Mathf.Acos(Vector3.Dot(position1, position2));
         }
 
-        // public static float DistanceToHyperplane(Vector3 )
+
     }
 }

@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Norture
+namespace Norture.Extensions
 {
     public static class RayExtensions
     {
