@@ -1,9 +1,5 @@
 ﻿Shader "Custom/NortureShader" {
   Properties {
-    _Color("Color", Color) = (1,1,1,1)
-    _MainTex("Albedo (RGB)", 2D) = "white" {}
-    _Glossiness("Smoothness", Range(0,1)) = 0.5
-    _Metallic("Metallic", Range(0,1)) = 0.0
     _Cube("Cubemap", CUBE) = "white" {}
   }
     SubShader {
@@ -23,16 +19,25 @@
       struct Input {
         float2 uv_MainTex;
         float3 worldPos;
+        float3 worldNormal;
       };
 
-      half _Glossiness;
-      half _Metallic;
-      fixed4 _Color;
+      float3 rotateToNormal(float3 normal, float3 v) {
+        float a = 1.0/(1.0 + normal.z);
+        float b = -normal.x*normal.y*a;
+        return float3(1.0 - normal.x*normal.x*a, b, -normal.x)*v.x
+             + float3(b, 1.0 - normal.y*normal.y*a, -normal.y)*v.y
+             + normal*v.z;
+      }
 
       void surf(Input IN, inout SurfaceOutputStandard o) {
-        float3 objectPos = normalize(mul(unity_WorldToObject, float4(IN.worldPos, 1.0)).xyz);
+        // float3 objectPos = normalize(mul(unity_WorldToObject, float4(IN.worldPos, 1.0)).xyz);
         // Albedo comes from a texture tinted by color
-        fixed4 c = texCUBE(_Cube, objectPos) /* float4(objectPos * 0.5 + 0.5, 1.0) */ * _Color;
+        //float3 normal = rotateToNormal(IN.worldNormal, -normalize(_WorldSpaceLightPos0.xyz));
+        float3 normal = IN.worldNormal;
+        fixed4 c = texCUBE(_Cube, normal);
+        o.Albedo = 0.0;
+        // o.Normal = 0.0;
         o.Emission = c.rgb;
         // Metallic and smoothness come from slider variables
         o.Metallic = 0.0;

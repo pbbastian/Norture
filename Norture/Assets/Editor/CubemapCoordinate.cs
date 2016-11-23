@@ -9,7 +9,7 @@ namespace Norture
         public float U;
         public float V;
 
-        static Vector3[] FaceOrigins = {
+        private static readonly Vector3[] FaceOrigins = {
             new Vector3(1f, 0f, 0f),
             new Vector3(-1f, 0f, 0f),
             new Vector3(0f, 1f, 0f),
@@ -18,13 +18,18 @@ namespace Norture
             new Vector3(0f, 0f, -1f)
         };
 
-        static float[] FaceToWorld = {
+        private static readonly float[] FaceToWorld = {
             0f, 0f, 0f, -1f, -1f, 0f,
             0f, 0f, 0f, -1f, 1f, 0f,
             1f, 0f, 0f, 0f, 0f, 1f,
             1f, 0f, 0f, 0f, 0f, -1f,
             1f, 0f, 0f, -1f, 0f, 0f,
             -1f, 0f, 0f, -1f, 0f, 0f
+        };
+
+        private static readonly CubemapFace[] NeighborFaces =
+        {
+
         };
 
         public CubemapCoordinate(CubemapFace face, float u, float v)

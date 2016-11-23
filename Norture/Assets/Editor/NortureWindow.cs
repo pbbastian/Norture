@@ -1,10 +1,6 @@
 ﻿using UnityEngine;
-using System.Collections;
-using System.Linq;
 using UnityEditor;
 using System;
-using System.Collections.Generic;
-using System.Text;
 using Norture.Extensions;
 
 namespace Norture
@@ -13,6 +9,7 @@ namespace Norture
     {
         private PreviewRenderUtility _previewRenderUtility;
         private Mesh _sphereMesh;
+        Mesh _cubeMesh;
         private Material _material;
         private Cubemap _cubemap;
         [SerializeField] private DragController _dragController;
@@ -23,11 +20,18 @@ namespace Norture
         private Texture _previewTexture;
         private Rect _previewRect;
         private bool _previewDirty = false;
-        private const int CubemapResolution = 512;
+        private const int CubemapResolution = 256;
         private DateTime _lastTime;
         private TimeSpan _currentTimeSpan;
         private int _callCount = 0;
         private int _correctCallCount = 0;
+        private float[] _mask;
+        private BrushWorker _brushWorker;
+        private DateTime _lastPaint;
+
+        public float BrushRadius = 5;
+        public Color BrushColor = Color.white;
+        public bool UseSoftBrush = false;
 
         [MenuItem("Window/Norture")]
         public static void ShowWindow()
@@ -39,6 +43,12 @@ namespace Norture
         {
             if (_previewDirty)
             {
+                // Debug.LogFormat("Request count: {0}", _brushWorker.RequestCount);
+                _previewDirty = false;
+                for (int i = 0; i < 6; i++)
+                {
+                    _cubemap.SetPixels(_brushWorker.Colors[i], (CubemapFace) i);
+                }
                 _cubemap.Apply();
                 _previewRenderUtility.BeginPreview(_previewRect, GUIStyle.none);
                 _previewRenderUtility.DrawMesh(_sphereMesh, Matrix4x4.identity, _material, 0);
@@ -51,7 +61,6 @@ namespace Norture
                 _previewRenderUtility.m_Camera.Render();
 
                 _previewTexture = _previewRenderUtility.EndPreview();
-                _previewDirty = false;
             }
 
             Repaint();
@@ -87,6 +96,21 @@ namespace Norture
             */
 
             GUI.DrawTexture(_previewRect, _previewTexture, ScaleMode.StretchToFill, false);
+            BrushRadius = EditorGUILayout.Slider("Brush radius", BrushRadius, 1f, 20f);
+            BrushColor = EditorGUILayout.ColorField("Brush color", BrushColor);
+            UseSoftBrush = EditorGUILayout.Toggle("Soft brush", UseSoftBrush);
+            EditorGUILayout.ObjectField("Material", null, typeof(Material), false);
+            EditorGUILayout.HelpBox("Please select a material that uses the Norture shader", MessageType.Info);
+
+            if (GUILayout.Button("Fill"))
+            {
+                _brushWorker.Fill();
+                _previewDirty = true;
+            }
+
+            _brushWorker.BrushColor = BrushColor;
+            _brushWorker.BrushRadius = BrushRadius;
+            _brushWorker.UseSoftBrush = UseSoftBrush;
         }
 
         void HandleClick(Rect rect, Camera camera)
@@ -107,23 +131,43 @@ namespace Norture
                 _downPosition = current.mousePosition.GlobalToRelativeLocalPoint(rect)
                     .RelativeLocalToScreenPoint(camera);
 
-                Vector3 downPositionWorldSpace;
+                Vector3 positionWorldSpace;
+                if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(_downPosition, out positionWorldSpace)) return;
+                var coordinate = new CubemapCoordinate(positionWorldSpace.normalized);
+                _brushWorker.PutBrushDown(coordinate.Face, (int)(coordinate.U * CubemapResolution), (int)(coordinate.V * CubemapResolution));
+
                 _downValid = true;
             }
             else if (_downValid && eventType == EventType.MouseUp && current.modifiers == EventModifiers.None)
             {
+                current.Use();
+
+                var currentPosition = current.mousePosition.GlobalToRelativeLocalPoint(rect)
+                    .RelativeLocalToScreenPoint(camera);
+                Vector3 positionWorldSpace;
+                if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(currentPosition, out positionWorldSpace)) return;
+                var coordinate = new CubemapCoordinate(positionWorldSpace.normalized);
+                _brushWorker.PutBrushUp(coordinate.Face, (int)(coordinate.U * CubemapResolution), (int)(coordinate.V * CubemapResolution));
+
                 _downValid = false;
             }
             else if (eventType == EventType.MouseDrag && _downValid && current.modifiers == EventModifiers.None)
             {
                 current.Use();
 
+
                 _upPosition = current.mousePosition.GlobalToRelativeLocalPoint(rect)
                     .RelativeLocalToScreenPoint(camera);
 
-                PaintScreenSpaceBrushOnSphere((int) _upPosition.x, (int) _upPosition.y);
-//                line((int) _downPosition.x, (int) _downPosition.y, (int) _upPosition.x, (int) _upPosition.y,
-//                    PaintScreenSpaceBrushOnSphere);
+//                PaintScreenSpaceBrushOnSphere((int) _upPosition.x, (int) _upPosition.y);
+                line((int) _downPosition.x, (int) _downPosition.y, (int) _upPosition.x, (int) _upPosition.y,
+                    QueueBrushPaint);
+//                var currentPosition = current.mousePosition.GlobalToRelativeLocalPoint(rect)
+//                    .RelativeLocalToScreenPoint(camera);
+//                Vector3 positionWorldSpace;
+//                if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(currentPosition, out positionWorldSpace)) return;
+//                var coordinate = new CubemapCoordinate(positionWorldSpace.normalized);
+//                _brushWorker.Paint(coordinate.Face, (int)(coordinate.U * CubemapResolution), (int)(coordinate.V * CubemapResolution));
 
                 _previewDirty = true;
                 _downPosition = _upPosition;
@@ -131,37 +175,120 @@ namespace Norture
             }
         }
 
-        void PlotScreenSpacePointOnSphere(int x, int y)
+        void QueueBrushPaint(int x, int y)
         {
-            Vector3 positionWorldSpace;
-            if (_previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x, y), out positionWorldSpace))
-                _cubemap.SetPixel(positionWorldSpace.normalized, Color.black);
-        }
-
-        void PaintScreenSpaceBrushOnSphere(int x0, int y0)
-        {
-            const int radius = 20;
-            var radiusSquared = radius * radius;
-            for (var x = x0 - radius; x <= x0 + radius; x++)
+            var now = DateTime.Now;
+            if (now - _lastPaint > TimeSpan.FromMilliseconds(Mathf.Lerp(0.05f, 0.5f, BrushRadius / 20f)))
             {
-                for (var y = y0 - radius; y <= y0 + radius; y++)
-                {
-                    var dx = x - x0;
-                    var dy = y - y0;
-                    double distanceSquared = dx * dx + dy * dy;
-
-                    Vector3 positionWorldSpace;
-                    if (distanceSquared <= radiusSquared &&
-                        _previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x, y), out positionWorldSpace))
-                    {
-                        _cubemap.SetPixel(positionWorldSpace.normalized, Color.black);
-                    }
-                }
+                //Debug.Log("more than 16 ms since last time");
+                _lastPaint = now;
+                Vector3 positionWorldSpace;
+                if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x, y), out positionWorldSpace))
+                    return;
+                var coordinate = new CubemapCoordinate(positionWorldSpace.normalized);
+                _brushWorker.Paint(coordinate.Face, (int) (coordinate.U * CubemapResolution),
+                    (int) (coordinate.V * CubemapResolution));
+            }
+            else
+            {
+                //Debug.Log("less than 16 ms since last time");
             }
         }
 
+//        void PlotScreenSpacePointOnSphere(int x, int y, Color color)
+//        {
+//            Vector3 positionWorldSpace;
+//            if (_previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x, y), out positionWorldSpace))
+//            {
+//                var coordinate = new CubemapCoordinate(positionWorldSpace.normalized);
+//                var currentColor = _cubemap.GetPixel(coordinate);
+//                _cubemap.SetPixel(coordinate, Color.Lerp(currentColor, color, color.a));
+//            }
+//        }
+//
+//        void PlotScreenSpacePointOnSphere(int x, int y)
+//        {
+//            PlotScreenSpacePointOnSphere(x, y, BrushColor);
+//        }
+//
+//        void PaintScreenSpaceBrushOnSphere(int x0, int y0)
+//        {
+//            var radiusSquared = BrushRadius * BrushRadius;
+//            for (var x = x0 - BrushRadius; x <= x0 + BrushRadius; x++)
+//            {
+//                for (var y = y0 - BrushRadius; y <= y0 + BrushRadius; y++)
+//                {
+//                    var dx = x - x0;
+//                    var dy = y - y0;
+//                    double distanceSquared = dx * dx + dy * dy;
+//                    double brushFactor = radiusSquared / distanceSquared;
+//
+//                    Vector3 positionWorldSpace;
+//                    if (distanceSquared <= radiusSquared)
+//                        PlotScreenSpacePointOnSphere((int) x, (int) y);
+//                }
+//            }
+//        }
+//
+//        void PaintMaskBrush(int x0, int y0)
+//        {
+//            Vector3 positionWorldSpace;
+//            if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x0, y0), out positionWorldSpace)) return;
+//            var delta = 1f / (float) _cubemap.width;
+//            var textureSpaceRadius = BrushRadius * 10e-2f * (float) _cubemap.width;
+//            var radiusSquared = textureSpaceRadius * textureSpaceRadius;
+//            var center = new CubemapCoordinate(positionWorldSpace.normalized);
+//
+//            for (var u = Mathf.Max(0f, center.U - textureSpaceRadius);
+//                u <= Mathf.Min(1f, center.U + textureSpaceRadius);
+//                u += delta)
+//            {
+//                for (var v = Mathf.Max(0f, center.V - textureSpaceRadius);
+//                    v <= Mathf.Min(1f, center.V + textureSpaceRadius);
+//                    v += delta)
+//                {
+//                    var du = u - center.U;
+//                    var dv = v - center.V;
+//                    double distanceSquared = du * du + dv * dv;
+//
+//                    if (distanceSquared > radiusSquared) continue;
+//                }
+//            }
+//        }
+//
+//        void PaintCubemapBrush(int x0, int y0)
+//        {
+//            Vector3 positionWorldSpace;
+//            if (!_previewRenderUtility.m_Camera.RaycastUnitSphere(new Vector2(x0, y0), out positionWorldSpace)) return;
+//            var delta = 1f / (float) _cubemap.width;
+//            var textureSpaceRadius = BrushRadius * 1e-2f;
+//            var radiusSquared = textureSpaceRadius * textureSpaceRadius;
+//            var center = new CubemapCoordinate(positionWorldSpace.normalized);
+//            for (var u = Mathf.Max(0f, center.U - textureSpaceRadius);
+//                u <= Mathf.Min(1f, center.U + textureSpaceRadius);
+//                u += delta)
+//            {
+//                for (var v = Mathf.Max(0f, center.V - textureSpaceRadius);
+//                    v <= Mathf.Min(1f, center.V + textureSpaceRadius);
+//                    v += delta)
+//                {
+//                    var du = u - center.U;
+//                    var dv = v - center.V;
+//                    double distanceSquared = du * du + dv * dv;
+//
+//                    if (distanceSquared > radiusSquared) continue;
+//
+//                    var point = new CubemapCoordinate(center.Face, u, v);
+//                    var currentColor = _cubemap.GetPixel(point);
+//                    _cubemap.SetPixel(point, Color.Lerp(currentColor, BrushColor, BrushColor.a));
+//                }
+//            }
+//        }
+
+        public delegate void LineCallback(int x, int y);
+
         // SEE http://stackoverflow.com/a/11683720
-        public void line(int x, int y, int x2, int y2, Action<int, int> plot)
+        public void line(int x, int y, int x2, int y2, LineCallback plot)
         {
             int w = x2 - x;
             int h = y2 - y;
@@ -267,14 +394,6 @@ namespace Norture
         }
         */
 
-        void SetCubemapPixelByDirection(Cubemap cubemap, Vector3 direction, Color color)
-        {
-            // Direction -> Cubemap -> Direction -> Cubemap for demonstrative purposes.
-            var coordinate = new CubemapCoordinate(new CubemapCoordinate(direction).ToDirection());
-            cubemap.SetPixel(coordinate.Face, (int) (coordinate.U * cubemap.width), (int) (coordinate.V * cubemap.width),
-                color);
-        }
-
         /** Cubemap arc coordinates
         IEnumerable<CubemapCoordinate> GetCubemapArcCoordinates(Cubemap cubemap, Vector3 startPosition,
             Vector3 endPosition)
@@ -324,56 +443,81 @@ namespace Norture
 
         void OnEnable()
         {
+            Debug.Log("OnEnable");
             _dragController = _dragController ?? new DragController(EventModifiers.Alt);
             _previewRenderUtility = new PreviewRenderUtility();
             _sphereMesh = GetSphereMesh();
+            _cubeMesh = GetCubeMesh();
             _material = LoadMaterial();
-            _cubemap = CreateCubemap();
-            InitializeCubemap(_cubemap);
+            _cubemap = AssetDatabase.LoadAssetAtPath<Cubemap>("Assets/Norture.cubemap");
+            if (_cubemap == null)
+            {
+                _cubemap = CreateCubemap();
+                AssetDatabase.CreateAsset(_cubemap, "Assets/Norture.cubemap");
+            }
             _material.SetTexture("_Cube", _cubemap);
             _previewTexture = new Texture2D(0, 0);
-            _previewRect = new Rect(Vector2.zero, new Vector2(CubemapResolution, CubemapResolution));
+            _previewRect = new Rect(Vector2.zero, new Vector2(_cubemap.width, _cubemap.width));
             _previewDirty = true;
             _lastTime = DateTime.Now;
+            _mask = new float[6*_cubemap.width*_cubemap.width];
+            if (_brushWorker != null)
+                _brushWorker.Dispose();
+            _brushWorker = new BrushWorker(_cubemap, BrushColor, BrushRadius, UseSoftBrush);
+            _brushWorker.Start();
+            _lastPaint = DateTime.Now;
         }
 
-        void InitializeCubemap(Cubemap cubemap)
+//        void InitializeCubemap(Cubemap cubemap)
+//        {
+//            var faces = new[]
+//            {
+//                CubemapFace.PositiveX, CubemapFace.NegativeX, CubemapFace.PositiveY, CubemapFace.NegativeY,
+//                CubemapFace.PositiveZ, CubemapFace.NegativeZ
+//            };
+//            var colors = new[]
+//            {
+//                new Color(1, 0, 0), new Color(1, 1, 0), new Color(0, 1, 0), new Color(0, 1, 1), new Color(0, 0, 1),
+//                new Color(1, 0, 1)
+//            };
+//            int i = 0;
+//
+//            foreach (var face in faces)
+//            {
+//                for (int x = 0; x < CubemapResolution; ++x)
+//                {
+//                    for (int y = 0; y < CubemapResolution; ++y)
+//                    {
+//                        cubemap.SetPixel(face, x, y, colors[i]);
+//                    }
+//                }
+//                ++i;
+//            }
+//
+//            cubemap.Apply();
+//        }
+
+        void OnDisable()
         {
-            var faces = new[]
-            {
-                CubemapFace.PositiveX, CubemapFace.NegativeX, CubemapFace.PositiveY, CubemapFace.NegativeY,
-                CubemapFace.PositiveZ, CubemapFace.NegativeZ
-            };
-            var colors = new[]
-            {
-                new Color(1, 0, 0), new Color(1, 1, 0), new Color(0, 1, 0), new Color(0, 1, 1), new Color(0, 0, 1),
-                new Color(1, 0, 1)
-            };
-            int i = 0;
-
-            foreach (var face in faces)
-            {
-                for (int x = 0; x < CubemapResolution; ++x)
-                {
-                    for (int y = 0; y < CubemapResolution; ++y)
-                    {
-                        cubemap.SetPixel(face, x, y, colors[i]);
-                    }
-                }
-                ++i;
-            }
-
-            cubemap.Apply();
-        }
-
-        void OnDestroy()
-        {
+            Debug.Log("OnDisable");
             _previewRenderUtility.Cleanup();
+            _previewRenderUtility = null;
+            _brushWorker.Dispose();
+            _brushWorker = null;
         }
 
         Mesh GetSphereMesh()
         {
             var gameObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            var meshFilter = gameObject.GetComponent<MeshFilter>();
+            var mesh = Instantiate(meshFilter.sharedMesh);
+            DestroyImmediate(gameObject);
+            return mesh;
+        }
+
+        Mesh GetCubeMesh()
+        {
+            var gameObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             var meshFilter = gameObject.GetComponent<MeshFilter>();
             var mesh = Instantiate(meshFilter.sharedMesh);
             DestroyImmediate(gameObject);
