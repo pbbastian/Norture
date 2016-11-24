@@ -2,32 +2,37 @@
 using UnityEditor;
 using System;
 using Norture.Extensions;
+using UnityEngine.Rendering;
 
 namespace Norture
 {
     public class NortureWindow : EditorWindow
     {
-        private PreviewRenderUtility _previewRenderUtility;
-        private Mesh _sphereMesh;
-        Mesh _cubeMesh;
-        private Material _material;
-        private Cubemap _cubemap;
-        [SerializeField] private DragController _dragController;
-        [SerializeField] private Vector2 _cameraDrag;
-        private Vector2 _downPosition;
-        private bool _downValid = false;
-        private Vector2 _upPosition;
-        private Texture _previewTexture;
-        private Rect _previewRect;
-        private bool _previewDirty = false;
-        private const int CubemapResolution = 256;
-        private DateTime _lastTime;
-        private TimeSpan _currentTimeSpan;
-        private int _callCount = 0;
-        private int _correctCallCount = 0;
-        private float[] _mask;
-        private BrushWorker _brushWorker;
-        private DateTime _lastPaint;
+        PreviewRenderUtility _previewRenderUtility;
+        PreviewRenderUtility _viewCubePRU;
+        Mesh _sphereMesh;
+        Rect _viewCubeRect;
+        Mesh _viewCubeMesh;
+        Material _viewCubeMaterial;
+        Texture _viewCubeRenderTexture;
+        Material _material;
+        Cubemap _cubemap;
+        [SerializeField] DragController _dragController;
+        [SerializeField] Vector2 _cameraDrag;
+        Vector2 _downPosition;
+        bool _downValid = false;
+        Vector2 _upPosition;
+        Texture _previewTexture;
+        Rect _previewRect;
+        bool _previewDirty = false;
+        const int CubemapResolution = 256;
+        DateTime _lastTime;
+        TimeSpan _currentTimeSpan;
+        int _callCount = 0;
+        int _correctCallCount = 0;
+        float[] _mask;
+        BrushWorker _brushWorker;
+        DateTime _lastPaint;
 
         public float BrushRadius = 5;
         public Color BrushColor = Color.white;
@@ -50,14 +55,17 @@ namespace Norture
                     _cubemap.SetPixels(_brushWorker.Colors[i], (CubemapFace) i);
                 }
                 _cubemap.Apply();
+
+                _viewCubePRU.BeginPreview(_viewCubeRect, GUIStyle.none);
+                SetCameraTransform(_viewCubePRU.m_Camera);
+                _viewCubePRU.DrawMesh(_viewCubeMesh, Matrix4x4.TRS(new Vector3(0f, -0.25f, 0f), Quaternion.identity, Vector3.one * 0.5f), _viewCubeMaterial, 0);
+                _viewCubePRU.m_Camera.Render();
+                _viewCubeRenderTexture = _viewCubePRU.EndPreview();
+
                 _previewRenderUtility.BeginPreview(_previewRect, GUIStyle.none);
+                SetCameraTransform(_previewRenderUtility.m_Camera);
                 _previewRenderUtility.DrawMesh(_sphereMesh, Matrix4x4.identity, _material, 0);
 
-                _previewRenderUtility.m_Camera.transform.position = Vector2.zero;
-                _previewRenderUtility.m_Camera.transform.rotation = Quaternion.Euler(_dragController.Position.y,
-                    _dragController.Position.x, 0);
-                _previewRenderUtility.m_Camera.transform.position =
-                    _previewRenderUtility.m_Camera.transform.forward * -6f;
                 _previewRenderUtility.m_Camera.Render();
 
                 _previewTexture = _previewRenderUtility.EndPreview();
@@ -66,9 +74,21 @@ namespace Norture
             Repaint();
         }
 
+        void SetCameraTransform(Camera camera)
+        {
+            camera.transform.position = Vector2.zero;
+            camera.transform.rotation = Quaternion.Euler(_dragController.Position.y,
+                _dragController.Position.x, 0);
+            camera.transform.position = camera.transform.forward * -6f;
+        }
+
         void OnGUI()
         {
             _previewRect = GUILayoutUtility.GetRect(position.width, position.width);
+            _viewCubeRect = _previewRect;
+            _viewCubeRect.width *= 0.2f;
+            _viewCubeRect.position = new Vector2(_viewCubeRect.position.x + _previewRect.width - _viewCubeRect.width, _viewCubeRect.position.y);
+            _viewCubeRect.height *= 0.2f;
             // var rect = new Rect(0, 0, position.width, position.height);
 
             _dragController.Sample(_previewRect);
@@ -95,7 +115,8 @@ namespace Norture
             }
             */
 
-            GUI.DrawTexture(_previewRect, _previewTexture, ScaleMode.StretchToFill, false);
+            GUI.DrawTexture(_previewRect, _previewTexture, ScaleMode.StretchToFill, true);
+            GUI.DrawTexture(_viewCubeRect, _viewCubeRenderTexture, ScaleMode.StretchToFill, true);
             BrushRadius = EditorGUILayout.Slider("Brush radius", BrushRadius, 1f, 20f);
             BrushColor = EditorGUILayout.ColorField("Brush color", BrushColor);
             UseSoftBrush = EditorGUILayout.Toggle("Soft brush", UseSoftBrush);
@@ -446,8 +467,10 @@ namespace Norture
             Debug.Log("OnEnable");
             _dragController = _dragController ?? new DragController(EventModifiers.Alt);
             _previewRenderUtility = new PreviewRenderUtility();
+            _viewCubePRU = new PreviewRenderUtility();
             _sphereMesh = GetSphereMesh();
-            _cubeMesh = GetCubeMesh();
+            _viewCubeMesh = GetViewCubeMesh();
+            _viewCubeMaterial = GetViewCubeMaterial();
             _material = LoadMaterial();
             _cubemap = AssetDatabase.LoadAssetAtPath<Cubemap>("Assets/Norture.cubemap");
             if (_cubemap == null)
@@ -515,13 +538,14 @@ namespace Norture
             return mesh;
         }
 
-        Mesh GetCubeMesh()
+        Mesh GetViewCubeMesh()
         {
-            var gameObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            var meshFilter = gameObject.GetComponent<MeshFilter>();
-            var mesh = Instantiate(meshFilter.sharedMesh);
-            DestroyImmediate(gameObject);
-            return mesh;
+            return AssetDatabase.LoadAssetAtPath<Mesh>("Assets/Models/ViewCube/cube.obj");
+        }
+
+        Material GetViewCubeMaterial()
+        {
+            return AssetDatabase.LoadAssetAtPath<Material>("Assets/Models/ViewCube/Materials/01___Default.mat");
         }
 
         Material LoadMaterial()
