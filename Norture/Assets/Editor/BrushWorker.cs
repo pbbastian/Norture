@@ -3,6 +3,7 @@ using System.Security.Principal;
 using System.Threading;
 using DisruptorUnity3d;
 using UnityEngine;
+using UnityEngine.Assertions;
 
 namespace Norture
 {
@@ -194,9 +195,7 @@ namespace Norture
 
                     var mask = _mask[(int)face];
                     var index = x + y * _cubemapSize;
-                    if (index < 0 || index >= _cubemapSize * _cubemapSize)
-                        Debug.LogWarningFormat("Index is {0}, max is {1}, should be {2}", index, mask.Length,
-                            _cubemapSize * _cubemapSize);
+                    Assert.IsTrue(index >= 0 || index < _cubemapSize * _cubemapSize);
 
                     float factor;
                     if (UseSoftBrush)

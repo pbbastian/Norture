@@ -1,6 +1,7 @@
 ﻿Shader "Custom/NortureShader" {
   Properties {
     _Cube("Cubemap", CUBE) = "white" {}
+    _MainTex ("Albedo (RGB)", 2D) = "white" {}
   }
     SubShader {
       Tags { "RenderType" = "Opaque" }
@@ -35,7 +36,9 @@
         // Albedo comes from a texture tinted by color
         //float3 normal = rotateToNormal(IN.worldNormal, -normalize(_WorldSpaceLightPos0.xyz));
         float3 normal = IN.worldNormal;
-        fixed4 c = texCUBE(_Cube, normal);
+        fixed4 albedo = tex2D(_MainTex, IN.uv_MainTex);
+        fixed4 light = texCUBE(_Cube, normal);
+        fixed4 c = albedo * light;
         o.Albedo = 0.0;
         // o.Normal = 0.0;
         o.Emission = c.rgb;
