@@ -9,7 +9,7 @@ namespace Norture
         public float U;
         public float V;
 
-        private static readonly Vector3[] FaceOrigins = {
+        static readonly Vector3[] FaceOrigins = {
             new Vector3(1f, 0f, 0f),
             new Vector3(-1f, 0f, 0f),
             new Vector3(0f, 1f, 0f),
@@ -18,7 +18,7 @@ namespace Norture
             new Vector3(0f, 0f, -1f)
         };
 
-        private static readonly float[] FaceToWorld = {
+        static readonly float[] FaceToWorld = {
             0f, 0f, 0f, -1f, -1f, 0f,
             0f, 0f, 0f, -1f, 1f, 0f,
             1f, 0f, 0f, 0f, 0f, 1f,

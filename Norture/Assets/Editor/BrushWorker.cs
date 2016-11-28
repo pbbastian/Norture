@@ -179,13 +179,15 @@ namespace Norture
             var sourceColors = _colors[SourceIndex][(int)face];
             var destinationColors = _colors[DestinationIndex][(int)face];
 
-            for (var x = Math.Max(0, x0 - upperRadius);
-                x < Mathf.Min(_cubemapSize, x0 + upperRadius);
-                x += delta)
+            var lowerX = Math.Max(0, x0 - upperRadius);
+            var lowerY = Math.Max(0, y0 - upperRadius);
+
+            var upperX = Mathf.Min(_cubemapSize - 1, x0 + upperRadius);
+            var upperY = Math.Min(_cubemapSize - 1, y0 + upperRadius);
+
+            for (var x = lowerX; x < upperX; x += delta)
             {
-                for (var y = Math.Max(0, y0 - upperRadius);
-                    y < Math.Min(_cubemapSize, y0 + upperRadius);
-                    y += delta)
+                for (var y = lowerY; y < upperY; y += delta)
                 {
                     var dx = x - x0;
                     var dy = y - y0;
