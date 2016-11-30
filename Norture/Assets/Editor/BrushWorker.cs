@@ -4,6 +4,7 @@ using System.Threading;
 using DisruptorUnity3d;
 using UnityEngine;
 using UnityEngine.Assertions;
+using Norture.Extensions;
 
 namespace Norture
 {
@@ -169,9 +170,30 @@ namespace Norture
             }
         }
 
-        void PerformPaint(CubemapFace face, int x0, int y0)
+        void PerformPaint(CubemapFace originalFace, int x0, int y0)
         {
-            const int delta = 1;
+            var neighbors = originalFace.GetNeighbors();
+            var neighborMatrices = originalFace.GetNeighborMatrices();
+
+            PaintFaceBrush(originalFace, x0, y0);
+            var uv = new Vector2(x0 / (float)_cubemapSize, y0 / (float)_cubemapSize);
+
+            for (var i = 0; i < neighbors.Length; i++)
+            {
+                var face = neighbors[i];
+
+                var origin = neighborMatrices[i].TransformPointFast(uv);
+
+                // Transformed x0 and y0
+                var x0t = (int)(origin.x * _cubemapSize);
+                var y0t = (int)(origin.y * _cubemapSize);
+
+                PaintFaceBrush(face, x0t, y0t);
+            }
+        }
+
+        void PaintFaceBrush(CubemapFace face, int x0, int y0)
+        {
             var radius = BrushRadius * 1e-2f * _cubemapSize;
             var upperRadius = (int)Mathf.Ceil(radius);
             var radiusSquared = radius * radius;
@@ -182,12 +204,12 @@ namespace Norture
             var lowerX = Math.Max(0, x0 - upperRadius);
             var lowerY = Math.Max(0, y0 - upperRadius);
 
-            var upperX = Mathf.Min(_cubemapSize - 1, x0 + upperRadius);
-            var upperY = Math.Min(_cubemapSize - 1, y0 + upperRadius);
+            var upperX = Math.Min(_cubemapSize, x0 + upperRadius);
+            var upperY = Math.Min(_cubemapSize, y0 + upperRadius);
 
-            for (var x = lowerX; x < upperX; x += delta)
+            for (var x = lowerX; x < upperX; x++)
             {
-                for (var y = lowerY; y < upperY; y += delta)
+                for (var y = lowerY; y < upperY; y++)
                 {
                     var dx = x - x0;
                     var dy = y - y0;
@@ -212,7 +234,9 @@ namespace Norture
                     mask[index] = Mathf.Max(mask[index], _brushOpacity * factor);
 
                     var sourceColor = sourceColors[index];
-                    destinationColors[index] = Color.LerpUnclamped(sourceColor, _brushColor, mask[index]);
+                    var opacity = mask[index];
+                    // destinationColors[index] = new Color((sourceColor.r * (1f - opacity) + _brushColor.r * opacity), (sourceColor.b * (1f - opacity) + _brushColor.g * opacity), (sourceColor.g * (1f - opacity) + _brushColor.b * opacity), 1f);
+                    destinationColors[index] = Color.Lerp(sourceColor, _brushColor, opacity);
                 }
             }
         }
@@ -230,7 +254,8 @@ namespace Norture
                     {
                         var index = x + y * _cubemapSize;
 
-                        destinationColors[index] = Color.LerpUnclamped(sourceColors[index], _brushColor, _brushOpacity);
+                        // new Color(x / (float)_cubemapSize, y / (float)_cubemapSize, 0f, 1f)
+                        destinationColors[index] = _brushColor;
                         sourceColors[index] = destinationColors[index];
                     }
                 }

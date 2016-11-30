@@ -3,6 +3,7 @@ using UnityEditor;
 using System;
 using Norture.Extensions;
 using UnityEngine.Rendering;
+using Norture.Matrix;
 
 namespace Norture
 {
@@ -33,6 +34,7 @@ namespace Norture
         float[] _mask;
         BrushWorker _brushWorker;
         DateTime _lastPaint;
+        int cubeUpdate = 0;
 
         public float BrushRadius = 5;
         public Color BrushColor = Color.white;
@@ -41,20 +43,24 @@ namespace Norture
         [MenuItem("Window/Norture")]
         public static void ShowWindow()
         {
-            GetWindow<NortureWindow>("Norture");
+            GetWindow<NortureWindow>(true, "Norture");
         }
 
         void Update()
         {
-            if (_previewDirty)
+            if (_previewDirty || Application.isPlaying)
             {
                 // Debug.LogFormat("Request count: {0}", _brushWorker.RequestCount);
                 _previewDirty = false;
-                for (int i = 0; i < 6; i++)
+                if (cubeUpdate % 2 == 0)
                 {
-                    _cubemap.SetPixels(_brushWorker.Colors[i], (CubemapFace) i);
+                    for (int i = 0; i < 6; i++)
+                    {
+                        _cubemap.SetPixels(_brushWorker.Colors[i], (CubemapFace)i);
+                    }
+                    _cubemap.Apply();
                 }
-                _cubemap.Apply();
+                cubeUpdate++;
 
                 _viewCubePRU.BeginPreview(_viewCubeRect, GUIStyle.none);
                 SetCameraTransform(_viewCubePRU.m_Camera);
@@ -127,6 +133,10 @@ namespace Norture
             {
                 _brushWorker.Fill();
                 _previewDirty = true;
+
+                Debug.Log(CubemapMatrices.PositiveY_NegativeZ);
+                Debug.Log(CubemapMatrices.PositiveY_NegativeZ.Inverted);
+                Debug.Log(CubemapMatrices.PositiveY_NegativeX.Inverted);
             }
 
             _brushWorker.BrushColor = BrushColor;

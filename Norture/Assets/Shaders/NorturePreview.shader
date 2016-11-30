@@ -1,4 +1,4 @@
-﻿Shader "Custom/NortureShader" {
+﻿Shader "Custom/NorturePreview" {
   Properties {
     _Cube("Cubemap", CUBE) = "white" {}
     _MainTex ("Albedo (RGB)", 2D) = "white" {}
@@ -37,7 +37,7 @@
         //float3 normal = rotateToNormal(IN.worldNormal, -normalize(_WorldSpaceLightPos0.xyz));
         float3 normal = IN.worldNormal;
         fixed4 albedo = tex2D(_MainTex, IN.uv_MainTex);
-        fixed4 light = texCUBE(_Cube, normal) * 2.0;
+        fixed4 light = texCUBE(_Cube, normal);
         fixed4 c = albedo * light;
         o.Albedo = 0.0;
         // o.Normal = 0.0;
