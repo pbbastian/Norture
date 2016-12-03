@@ -157,6 +157,7 @@ namespace Norture
             else if (eventType == EventType.MouseDown && current.modifiers == EventModifiers.None &&
                      rect.Contains(current.mousePosition))
             {
+                Debug.Log(current.mousePosition);
                 current.Use();
 
                 _downPosition = current.mousePosition.GlobalToRelativeLocalPoint(rect)
