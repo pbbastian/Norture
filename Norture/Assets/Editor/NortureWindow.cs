@@ -126,11 +126,10 @@ namespace Norture
             BrushRadius = EditorGUILayout.Slider("Brush radius", BrushRadius, 1f, 20f);
             BrushColor = EditorGUILayout.ColorField("Brush color", BrushColor);
             UseSoftBrush = EditorGUILayout.Toggle("Soft brush", UseSoftBrush);
-            EditorGUILayout.ObjectField("Material", null, typeof(Material), false);
-            EditorGUILayout.HelpBox("Please select a material that uses the Norture shader", MessageType.Info);
 
             if (GUILayout.Button("Fill"))
             {
+                Debug.LogFormat("pixelRect: {0}", _previewRenderUtility.m_Camera.pixelRect);
                 _brushWorker.Fill();
                 _previewDirty = true;
 
